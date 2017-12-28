@@ -3805,6 +3805,10 @@ int tls_construct_new_session_ticket(SSL *s, WPACKET *pkt)
  */
 int tls_construct_cert_status_body(SSL *s, WPACKET *pkt)
 {
+    // XXX This is the function which assembles the handshake message including all statūs.
+    // if v2, send them all in a list, if v1 send only first.
+    // XXX look up in rfc how lists/arrays are built. Looks like 24-bit length prefix and then the values
+    // where it's known how long each value is.
     if (!WPACKET_put_bytes_u8(pkt, s->ext.status_type)
             || !WPACKET_sub_memcpy_u24(pkt, s->ext.ocsp.resp,
                                        s->ext.ocsp.resp_len)) {

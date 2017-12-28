@@ -190,6 +190,9 @@ int ERR_load_SSL_strings(void);
 # define SSL_F_SSL_MODULE_INIT                            392
 # define SSL_F_SSL_NEW                                    186
 # define SSL_F_SSL_NEXT_PROTO_VALIDATE                    565
+# define SSL_F_SSL_OCSP_MULTI_RESP_NEW                    613
+# define SSL_F_SSL_OCSP_MULTI_RESP_GET                    614
+# define SSL_F_SSL_OCSP_MULTI_RESP_SET                    615
 # define SSL_F_SSL_PARSE_CLIENTHELLO_RENEGOTIATE_EXT      300
 # define SSL_F_SSL_PARSE_CLIENTHELLO_TLSEXT               302
 # define SSL_F_SSL_PARSE_CLIENTHELLO_USE_SRTP_EXT         310

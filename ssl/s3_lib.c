@@ -3551,18 +3551,45 @@ long ssl3_ctrl(SSL *s, int cmd, long larg, void *parg)
         break;
 
     case SSL_CTRL_GET_TLSEXT_STATUS_REQ_OCSP_RESP:
-        *(unsigned char **)parg = s->ext.ocsp.resp;
-        if (s->ext.ocsp.resp_len == 0
-                || s->ext.ocsp.resp_len > LONG_MAX)
-            return -1;
-        return (long)s->ext.ocsp.resp_len;
+        {
+            SSL_OCSP_MULTI_RESP *resp;
+            long n;
+            ossl_ssize_t len;
+
+            n = SSL_get_tlsext_status_ocsp_multi_resp(s, &resp);
+            if (n <= 0)
+                return -1;
+            len = SSL_OCSP_MULTI_RESP_get(resp, 0, (unsigned char **)parg);
+            if (len == 0 || len > LONG_MAX)
+                return -1;
+            return (long)len;
+        }
 
     case SSL_CTRL_SET_TLSEXT_STATUS_REQ_OCSP_RESP:
-        OPENSSL_free(s->ext.ocsp.resp);
-        s->ext.ocsp.resp = parg;
-        s->ext.ocsp.resp_len = larg;
-        ret = 1;
-        break;
+        {
+            SSL_OCSP_MULTI_RESP *resp;
+            resp = SSL_OCSP_MULTI_RESP_new(1);
+            if (resp == NULL)
+                return 0;
+            ret = SSL_OCSP_MULTI_RESP_set(resp, 0, parg, larg, 0);
+            SSL_OCSP_MULTI_RESP_free(resp);
+            return ret;
+        }
+
+    case SSL_CTRL_GET_TLSEXT_STATUS_REQ_OCSP_MULTI_RESP:
+        *(SSL_OCSP_MULTI_RESP **)parg = s->ext.ocsp.multi_resp;
+        return (s->ext.ocsp.multi_resp == NULL) ? 0
+               : (long)SSL_OCSP_MULTI_RESP_num(s->ext.ocsp.multi_resp);
+
+    case SSL_CTRL_SET_TLSEXT_STATUS_REQ_OCSP_MULTI_RESP:
+        {
+            SSL_OCSP_MULTI_RESP *resp = parg;
+            if (resp != NULL && SSL_OCSP_MULTI_RESP_up_ref(resp) != 1)
+                return 0;
+            SSL_OCSP_MULTI_RESP_free(s->ext.ocsp.multi_resp);
+            s->ext.ocsp.multi_resp = resp;
+            return 1;
+        }
 
 #ifndef OPENSSL_NO_HEARTBEATS
     case SSL_CTRL_DTLS_EXT_SEND_HEARTBEAT:

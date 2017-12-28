@@ -160,6 +160,8 @@ extern "C" {
 # define TLSEXT_NAMETYPE_host_name 0
 /* status request value from RFC3546 */
 # define TLSEXT_STATUSTYPE_ocsp 1
+/* status request v2 value from RFC6961 */
+# define TLSEXT_STATUSTYPE_ocsp_multi 2
 
 /* ECPointFormat values from RFC4492 */
 # define TLSEXT_ECPOINTFORMAT_first                      0
@@ -210,6 +212,16 @@ extern "C" {
 # define TLSEXT_max_fragment_length_1024        2
 # define TLSEXT_max_fragment_length_2048        3
 # define TLSEXT_max_fragment_length_4096        4
+
+typedef struct ssl_ocsp_multi_resp_st SSL_OCSP_MULTI_RESP;
+SSL_OCSP_MULTI_RESP *SSL_OCSP_MULTI_RESP_new(unsigned n_responses);
+int SSL_OCSP_MULTI_RESP_up_ref(SSL_OCSP_MULTI_RESP *resp);
+void SSL_OCSP_MULTI_RESP_free(SSL_OCSP_MULTI_RESP *resp);
+unsigned SSL_OCSP_MULTI_RESP_num(SSL_OCSP_MULTI_RESP *resp);
+int SSL_OCSP_MULTI_RESP_set(SSL_OCSP_MULTI_RESP *resp, unsigned n,
+                            unsigned char *data, size_t len, int copy);
+ossl_ssize_t SSL_OCSP_MULTI_RESP_get(SSL_OCSP_MULTI_RESP *resp, unsigned n,
+                                     unsigned char **data);
 
 int SSL_CTX_set_tlsext_max_fragment_length(SSL_CTX *ctx, uint8_t mode);
 int SSL_set_tlsext_max_fragment_length(SSL *ssl, uint8_t mode);
@@ -276,6 +288,12 @@ __owur int SSL_check_chain(SSL *s, X509 *x, EVP_PKEY *pk, STACK_OF(X509) *chain)
 
 # define SSL_set_tlsext_status_ocsp_resp(ssl, arg, arglen) \
         SSL_ctrl(ssl,SSL_CTRL_SET_TLSEXT_STATUS_REQ_OCSP_RESP,arglen,arg)
+
+# define SSL_get_tlsext_status_ocsp_multi_resp(ssl, arg) \
+        SSL_ctrl(ssl,SSL_CTRL_GET_TLSEXT_STATUS_REQ_OCSP_MULTI_RESP,0,arg)
+
+# define SSL_set_tlsext_status_ocsp_multi_resp(ssl, arg) \
+        SSL_ctrl(ssl,SSL_CTRL_SET_TLSEXT_STATUS_REQ_OCSP_MULTI_RESP,0,arg)
 
 # define SSL_CTX_set_tlsext_servername_callback(ctx, cb) \
         SSL_CTX_callback_ctrl(ctx,SSL_CTRL_SET_TLSEXT_SERVERNAME_CB,\

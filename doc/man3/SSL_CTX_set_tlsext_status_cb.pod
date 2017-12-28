@@ -11,7 +11,14 @@ SSL_CTX_get_tlsext_status_type,
 SSL_set_tlsext_status_type,
 SSL_get_tlsext_status_type,
 SSL_get_tlsext_status_ocsp_resp,
-SSL_set_tlsext_status_ocsp_resp
+SSL_set_tlsext_status_ocsp_resp,
+SSL_get_tlsext_status_ocsp_multi_resp,
+SSL_set_tlsext_status_ocsp_multi_resp,
+SSL_OCSP_MULTI_RESP_new,
+SSL_OCSP_MULTI_RESP_free,
+SSL_OCSP_MULTI_RESP_num,
+SSL_OCSP_MULTI_RESP_set,
+SSL_OCSP_MULTI_RESP_get
 - OCSP Certificate Status Request functions
 
 =head1 SYNOPSIS
@@ -33,17 +40,50 @@ SSL_set_tlsext_status_ocsp_resp
  long SSL_get_tlsext_status_ocsp_resp(ssl, unsigned char **resp);
  long SSL_set_tlsext_status_ocsp_resp(ssl, unsigned char *resp, int len);
 
+ long SSL_get_tlsext_status_ocsp_multi_resp(ssl, SSL_OCSP_MULTI_RESP **resp);
+ long SSL_set_tlsext_status_ocsp_multi_resp(ssl, SSL_OCSP_MULTI_RESP *resp);
+
+ SSL_OCSP_MULTI_RESP *SSL_OCSP_MULTI_RESP_new(unsigned n_responses);
+ int SSL_OCSP_MULTI_RESP_up_ref(SSL_OCSP_MULTI_RESP *resp);
+ void SSL_OCSP_MULTI_RESP_free(SSL_OCSP_MULTI_RESP *resp);
+ unsigned SSL_OCSP_MULTI_RESP_num(SSL_OCSP_MULTI_RESP *resp);
+ int SSL_OCSP_MULTI_RESP_set(SSL_OCSP_MULTI_RESP *resp, unsigned n, unsigned char *data, size_t len, int copy);
+ ossl_ssize_t SSL_OCSP_MULTI_RESP_get(SSL_OCSP_MULTI_RESP *resp, unsigned n, unsigned char **data);
+
 =head1 DESCRIPTION
 
 A client application may request that a server send back an OCSP status response
-(also known as OCSP stapling). To do so the client should call the
+(also known as OCSP stapling). There are two TLS extensions defined:
+
+=over
+
+=item
+I<status_request>: L<https://tools.ietf.org/html/rfc6066>
+
+This will request the OCSP status for only the server certificate, excluding any
+intermediate certificates in the chain.
+
+=item
+I<status_request_v2>: L<https://tools.ietf.org/html/rfc6961>
+
+This will request the OCSP status for the complete server certificate chain,
+i.e. the server certificate and all intermediate certificates.
+
+=back
+
+=head2 Client
+
+To request the OCSP status, the client should call the 
 SSL_CTX_set_tlsext_status_type() function prior to the creation of any SSL
 objects. Alternatively an application can call the SSL_set_tlsext_status_type()
 function on an individual SSL object prior to the start of the handshake.
-Currently the only supported type is B<TLSEXT_STATUSTYPE_ocsp>. This value
-should be passed in the B<type> argument. Calling
-SSL_CTX_get_tlsext_status_type() will return the type B<TLSEXT_STATUSTYPE_ocsp>
+Currently the supported types are B<TLSEXT_STATUSTYPE_ocsp> for I<status_req>
+and B<TLSEXT_STATUSTYPE_ocsp_multi> for I<status_request_v2>.
+Calling SSL_CTX_get_tlsext_status_type() will return the type
 previously set via SSL_CTX_set_tlsext_status_type() or -1 if not set.
+
+For interoperability with servers that only support I<status_request>, OpenSSL
+will use both extensions if B<TLSEXT_STATUSTYPE_ocsp_multi> is set.
 
 The client should additionally provide a callback function to decide what to do
 with the returned OCSP response by calling SSL_CTX_set_tlsext_status_cb(). The
@@ -58,27 +98,45 @@ SSL_CTX_get_tlsext_status_arg().
 
 On the client side SSL_get_tlsext_status_type() can be used to determine whether
 the client has previously called SSL_set_tlsext_status_type(). It will return
-B<TLSEXT_STATUSTYPE_ocsp> if it has been called or -1 otherwise. On the server
-side SSL_get_tlsext_status_type() can be used to determine whether the client
-requested OCSP stapling. If the client requested it then this function will
-return B<TLSEXT_STATUSTYPE_ocsp>, or -1 otherwise.
+the previously value if one has been set or -1 otherwise.
 
-The response returned by the server can be obtained via a call to
-SSL_get_tlsext_status_ocsp_resp(). The value B<*resp> will be updated to point
-to the OCSP response data and the return value will be the length of that data.
-Typically a callback would obtain an OCSP_RESPONSE object from this data via a
-call to the d2i_OCSP_RESPONSE() function. If the server has not provided any
-response data then B<*resp> will be NULL and the return value from
-SSL_get_tlsext_status_ocsp_resp() will be -1.
+To obtain the response returned by the server,
+B<SSL_get_tlsext_status_ocsp_resp> or B<SSL_get_tlsext_status_ocsp_multi_resp>
+can be called. Both functions will work for either extension type.
+
+B<SSL_get_tlsext_status_ocsp_resp> will update the value B<*resp> to point to
+the OCSP response data and the return value will be the length of that data.
+
+B<SSL_get_tlsext_status_ocsp_multi_resp> will update the value B<*resp> to point
+to a list of OCSP responses and the return value will be the number of responses
+in that list, also counting empty responses.
+
+If the server has not provided any response data then B<*resp> will be NULL and
+the return value from these funtions will be -1.
+
+Typically a callback would obtain OCSP_RESPONSE objects from this data via a
+call to the d2i_OCSP_RESPONSE() function.
+
+=head2 Server
+
+On the server side SSL_get_tlsext_status_type() can be used to determine whether
+the client requested OCSP stapling. If the client requested it then this
+function will return B<TLSEXT_STATUSTYPE_ocsp> or
+B<TLSEXT_STATUSTYPE_ocsp_multi>, or -1 otherwise.
 
 A server application must also call the SSL_CTX_set_tlsext_status_cb() function
 if it wants to be able to provide clients with OCSP Certificate Status
-responses. Typically the server callback would obtain the server certificate
-that is being sent back to the client via a call to SSL_get_certificate();
-obtain the OCSP response to be sent back; and then set that response data by
-calling SSL_set_tlsext_status_ocsp_resp(). A pointer to the response data should
+responses. Typically the server callback would obtain the server certificates
+that are being sent back to the client via calls to SSL_get_certificate() and
+SSL_get0_chain_certs(); obtain the OCSP responses to be sent back; and then set
+that response data by calling SSL_set_tlsext_status_ocsp_resp() or
+SSL_set_tlsext_status_ocsp_multi_resp(). A pointer to the response data should
 be provided in the B<resp> argument, and the length of that data should be in
-the B<len> argument.
+the B<len> argument. XXX
+
+B<SSL_OCSP_MULTI_RESP_set> must not be called again when the I<resp> was set to
+an B<SSL> object. To replace an OCSP response with a freshly fetched one,
+create a new B<SSL_OCSP_MULTI_RESP> object and free the old one.
 
 =head1 RETURN VALUES
 
@@ -111,9 +169,12 @@ side if the client requested OCSP stapling. Otherwise -1 is returned.
 SSL_get_tlsext_status_type(), SSL_CTX_get_tlsext_status_type() and
 SSL_CTX_set_tlsext_status_type() were added in OpenSSL 1.1.0.
 
+B<TLSEXT_STATUSTYPE_ocsp_multi>, SSL_get_tlsext_status_ocsp_multi_resp() and
+SSL_set_tlsext_status_ocsp_multi_resp() were added in OpenSSL 1.XXX.XXX
+
 =head1 COPYRIGHT
 
-Copyright 2015-2016 The OpenSSL Project Authors. All Rights Reserved.
+Copyright 2015-2018 The OpenSSL Project Authors. All Rights Reserved.
 
 Licensed under the OpenSSL license (the "License").  You may not use
 this file except in compliance with the License.  You can obtain a copy

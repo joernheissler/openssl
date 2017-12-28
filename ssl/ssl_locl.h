@@ -465,6 +465,17 @@ struct ssl_method_st {
     long (*ssl_ctx_callback_ctrl) (SSL_CTX *s, int cb_id, void (*fp) (void));
 };
 
+/* Used to hold an array of OCSPResponse DER encodings */
+struct ssl_ocsp_multi_resp_st {
+    CRYPTO_RWLOCK *lock;
+    CRYPTO_REF_COUNT references;
+    unsigned n_responses;
+    struct {
+        size_t len;
+        unsigned char *p;
+    } *responses;
+};
+
 /*-
  * Lets make this into an ASN.1 type structure as follows
  * SSL_SESSION_ID ::= SEQUENCE {
@@ -1223,6 +1234,8 @@ struct ssl_st {
             /* OCSP response received or to be sent */
             unsigned char *resp;
             size_t resp_len;
+            /* OCSP-Multi responses received or to be sent */
+            SSL_OCSP_MULTI_RESP *multi_resp;
         } ocsp;
 
         /* RFC4507 session ticket expected to be received or sent */

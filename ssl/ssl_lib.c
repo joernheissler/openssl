@@ -761,8 +761,7 @@ SSL *SSL_new(SSL_CTX *ctx)
     s->ext.status_expected = 0;
     s->ext.ocsp.ids = NULL;
     s->ext.ocsp.exts = NULL;
-    s->ext.ocsp.resp = NULL;
-    s->ext.ocsp.resp_len = 0;
+    s->ext.ocsp.resp_multi = NULL;
     SSL_CTX_up_ref(ctx);
     s->session_ctx = ctx;
 #ifndef OPENSSL_NO_EC
@@ -4491,12 +4490,15 @@ static int ct_extract_ocsp_response_scts(SSL *s)
     OCSP_RESPONSE *rsp = NULL;
     STACK_OF(SCT) *scts = NULL;
     int i;
+    long resp_len;
+    unsigned char *resp;
 
-    if (s->ext.ocsp.resp == NULL || s->ext.ocsp.resp_len == 0)
+    resp_len = SSL_get_tlsext_status_ocsp_resp(s, &resp);
+    if (resp_len <= 0 || resp == NULL)
         goto err;
 
-    p = s->ext.ocsp.resp;
-    rsp = d2i_OCSP_RESPONSE(NULL, &p, (int)s->ext.ocsp.resp_len);
+    p = resp;
+    rsp = d2i_OCSP_RESPONSE(NULL, &p, (int)resp_len);
     if (rsp == NULL)
         goto err;
 

@@ -2446,3 +2446,120 @@ uint8_t SSL_SESSION_get_max_fragment_length(const SSL_SESSION *session)
 {
     return session->ext.max_fragment_len_mode;
 }
+
+SSL_OCSP_MULTI_RESP *SSL_OCSP_MULTI_RESP_new(unsigned n_responses)
+{
+    SSL_OCSP_MULTI_RESP *ref;
+
+    ref = OPENSSL_zalloc(sizeof(*ref));
+    if (ref == NULL) {
+        goto err;
+    }
+
+    resp->references = 1;
+    resp->lock = CRYPTO_THREAD_lock_new();
+    if (resp->lock == NULL) {
+        goto err;
+    }
+
+    resp->n_responses = n_responses;
+    resp->responses = OPENSSL_zalloc(n_responses * sizeof(*resp->responses));
+    if (resp->responses == NULL) {
+        goto err;
+    }
+
+    return resp;
+
+err:
+    if (resp != NULL) {
+        OPENSSL_free(resp->responses);
+        CRYPTO_THREAD_lock_free(resp->lock);
+        OPENSSL_free(resp);
+    }
+    SSLerr(SSL_F_SSL_OCSP_MULTI_RESP_NEW, ERR_R_MALLOC_FAILURE);
+    return NULL;
+}
+
+int SSL_OCSP_MULTI_RESP_up_ref(SSL_OCSP_MULTI_RESP *resp)
+{
+    int i;
+
+    if (CRYPTO_UP_REF(&resp->references, &i, resp->lock) <= 0)
+        return 0;
+
+    REF_PRINT_COUNT("SSL_OCSP_MULTI_RESP", resp);
+    REF_ASSERT_ISNT(i < 2);
+    return (i > 1) ? 1 : 0;
+}
+
+void SSL_OCSP_MULTI_RESP_free(SSL_OCSP_MULTI_RESP *resp)
+{
+    int i;
+    unsigned n;
+
+    if (resp == NULL)
+        return;
+    
+    CRYPTO_DOWN_REF(&resp->references, &i, resp->lock);
+    REF_PRINT_COUNT("SSL_OCSP_MULTI_RESP", resp);
+    if (i > 0)
+        return;
+    REF_ASSERT_ISNT(i < 0);
+
+    for (n = 0; n < resp->n_responses; ++n) {
+        OPENSSL_free(resp->responses[n].p);
+    }
+    OPENSSL_free(resp->responses);
+    CRYPTO_THREAD_lock_free(resp->lock);
+    OPENSSL_free(resp);
+}
+
+unsigned SSL_OCSP_MULTI_RESP_num(SSL_OCSP_MULTI_RESP *resp)
+{
+    return resp->n_responses;
+}
+
+ossl_ssize_t SSL_OCSP_MULTI_RESP_get(SSL_OCSP_MULTI_RESP *resp, unsigned n,
+                                     unsigned char **data)
+{
+    if (n >= resp->n_responses) {
+        SSLerr(SSL_F_SSL_OCSP_MULTI_RESP_GET, ERR_R_PASSED_INVALID_ARGUMENT);
+        /* XXX unhappy about different return value here and below in _set */
+        return -1;
+    }
+
+    if (data != NULL) {
+        *data = resp->responses[n].data;
+    }
+    return (ossl_ssize_t)resp->responses[n].len;
+}
+
+int SSL_OCSP_MULTI_RESP_set(SSL_OCSP_MULTI_RESP *resp, unsigned n,
+                            unsigned char *data, size_t len, int copy)
+{
+    unsigned char *tmp = NULL;
+
+    if (n >= resp->n_responses) {
+        SSLerr(SSL_F_SSL_OCSP_MULTI_RESP_SET, ERR_R_PASSED_INVALID_ARGUMENT);
+        return 0;
+    }
+
+    if (len > 0) {
+        if (copy == 1) {
+            tmp = OPENSSL_memdup(data, len);
+            if (tmp == NULL) {
+                SSLerr(SSL_F_SSL_OCSP_MULTI_RESP_SET, ERR_R_MALLOC_FAILURE);
+                return -1;
+            }
+        } else {
+            tmp = data;
+        }
+    }
+
+    OPENSSL_free(resp->responses[n].data);
+
+    resp->responses[n].data = tmp;
+    resp->responses[n].len = len;
+
+    return 1;
+}
