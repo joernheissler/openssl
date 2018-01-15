@@ -3557,8 +3557,10 @@ long ssl3_ctrl(SSL *s, int cmd, long larg, void *parg)
             ossl_ssize_t len;
 
             n = SSL_get_tlsext_status_ocsp_multi_resp(s, &resp);
-            if (n <= 0)
+            if (n <= 0) {
+                *(unsigned char **)parg = NULL;
                 return -1;
+            }
             len = SSL_OCSP_MULTI_RESP_get(resp, 0, (unsigned char **)parg);
             if (len == 0 || len > LONG_MAX)
                 return -1;
@@ -3578,7 +3580,7 @@ long ssl3_ctrl(SSL *s, int cmd, long larg, void *parg)
 
     case SSL_CTRL_GET_TLSEXT_STATUS_REQ_OCSP_MULTI_RESP:
         *(SSL_OCSP_MULTI_RESP **)parg = s->ext.ocsp.multi_resp;
-        return (s->ext.ocsp.multi_resp == NULL) ? 0
+        return (s->ext.ocsp.multi_resp == NULL) ? -1
                : (long)SSL_OCSP_MULTI_RESP_num(s->ext.ocsp.multi_resp);
 
     case SSL_CTRL_SET_TLSEXT_STATUS_REQ_OCSP_MULTI_RESP:

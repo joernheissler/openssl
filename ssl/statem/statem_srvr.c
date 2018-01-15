@@ -3805,19 +3805,51 @@ int tls_construct_new_session_ticket(SSL *s, WPACKET *pkt)
  */
 int tls_construct_cert_status_body(SSL *s, WPACKET *pkt)
 {
-    // XXX This is the function which assembles the handshake message including all statūs.
-    // if v2, send them all in a list, if v1 send only first.
-    // XXX look up in rfc how lists/arrays are built. Looks like 24-bit length prefix and then the values
-    // where it's known how long each value is.
-    if (!WPACKET_put_bytes_u8(pkt, s->ext.status_type)
-            || !WPACKET_sub_memcpy_u24(pkt, s->ext.ocsp.resp,
-                                       s->ext.ocsp.resp_len)) {
-        SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_F_TLS_CONSTRUCT_CERT_STATUS_BODY,
-                 ERR_R_INTERNAL_ERROR);
-        return 0;
+    if (!WPACKET_put_bytes_u8(pkt, s->ext.status_type))
+        goto err;
+
+    switch (s->ext.status_type) {
+    case TLSEXT_STATUSTYPE_ocsp_multi:
+        {
+            long i, n;
+            SSL_OCSP_MULTI_RESP *resp;
+            n = SSL_get_tlsext_status_ocsp_multi_resp(s, &resp);
+
+            if (!WPACKET_start_sub_packet_u24(pkt))
+                goto err;
+
+            /* XXX add safeguard against user sending more status responses than there are certs? */
+            for (i = 0; i < n; ++i) {
+                unsigned char *data;
+                ossl_ssize_t data_len;
+                data_len = SSL_OCSP_MULTI_RESP_get(resp, i, &data);
+                if (data_len == -1) /* Shouldn't be possible */
+                    goto err;
+                if (!WPACKET_sub_memcpy_u24(pkt, data, data_len))
+                    goto err;
+            }
+            if (!WPACKET_close(pkt))
+                goto err;
+        }
+        break;
+
+    default: /* Fall through to TLSEXT_STATUSTYPE_ocsp */
+    case TLSEXT_STATUSTYPE_ocsp:
+        {
+            long resp_len;
+            unsigned char *resp;
+            resp_len = SSL_get_tlsext_status_ocsp_resp(s, &resp);
+            if (WPACKET_sub_memcpy_u24(pkt, resp, resp_len < 0 : 0 : resp_len))
+                goto err;
+        }
+        break;
     }
 
     return 1;
+err:
+    SSLfatal(s, SSL_AD_INTERNAL_ERROR, SSL_F_TLS_CONSTRUCT_CERT_STATUS_BODY,
+             ERR_R_INTERNAL_ERROR);
+    return 0;
 }
 
 int tls_construct_cert_status(SSL *s, WPACKET *pkt)

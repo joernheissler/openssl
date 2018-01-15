@@ -477,6 +477,7 @@ static const ssl_trace_tbl ssl_exts_tbl[] = {
 # endif
     {TLSEXT_TYPE_application_layer_protocol_negotiation,
      "application_layer_protocol_negotiation"},
+    {TLSEXT_TYPE_status_request_v2, "status_request_v2"},
     {TLSEXT_TYPE_signed_certificate_timestamp, "signed_certificate_timestamps"},
     {TLSEXT_TYPE_padding, "padding"},
     {TLSEXT_TYPE_encrypt_then_mac, "encrypt_then_mac"},

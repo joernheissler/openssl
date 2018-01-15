@@ -187,7 +187,16 @@ static const EXTENSION_DEFINITION ext_defs[] = {
         tls_parse_stoc_status_request, tls_construct_stoc_status_request,
         tls_construct_ctos_status_request, NULL
     },
+    {
+        TLSEXT_TYPE_status_request_v2,
+        SSL_EXT_CLIENT_HELLO | SSL_EXT_TLS1_2_SERVER_HELLO
+        | SSL_EXT_TLS1_3_CERTIFICATE,
+        init_status_request, tls_parse_ctos_status_request_v2,
+        tls_parse_stoc_status_request_v2, tls_construct_stoc_status_request_v2,
+        tls_construct_ctos_status_request_v2, NULL
+    },
 #else
+    INVALID_EXTENSION,
     INVALID_EXTENSION,
 #endif
 #ifndef OPENSSL_NO_NEXTPROTONEG

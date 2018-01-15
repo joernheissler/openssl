@@ -705,6 +705,7 @@ typedef enum tlsext_index_en {
     TLSEXT_IDX_supported_groups,
     TLSEXT_IDX_session_ticket,
     TLSEXT_IDX_status_request,
+    TLSEXT_IDX_status_request_v2,
     TLSEXT_IDX_next_proto_neg,
     TLSEXT_IDX_application_layer_protocol_negotiation,
     TLSEXT_IDX_use_srtp,
